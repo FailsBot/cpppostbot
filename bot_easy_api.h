@@ -31,5 +31,5 @@ int easy_perform_sendLocation(CURL *c, TgInteger chat_id,
 		TgInteger reply_id = 0, writefn_data *d = 0);
 int easy_perform_leaveChat(CURL *c, TgInteger chatId);
 bool easy_bot_check_command(const char *cmd, size_t sz, const char *name, 
-		size_t name_sz, size_t *off, bool *shortcmd = 0);
+		size_t name_sz, size_t *cmd_end_off, bool *shortcmd = 0);
 #endif

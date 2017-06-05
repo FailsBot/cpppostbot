@@ -386,15 +386,15 @@ int easy_perform_sendEscapedLongMessage(CURL *curl, TgInteger chatId,
 }
 
 bool easy_bot_check_command(const char *cmd, size_t sz, const char *name, 
-		size_t name_sz, size_t *off, bool *shortcmd = 0)
+		size_t name_sz, size_t *cmd_end_off, bool *shortcmd = 0)
 {
 	if (cmd[0] != '/') {
 		return false;
 	}
 	const char *tok = strpbrk(cmd + 1, "@ ");
 	if (!tok) {
-		if (off) {
-			*off = sz;
+		if (cmd_end_off) {
+			*cmd_end_off = sz;
 		}
 		if (shortcmd) {
 			*shortcmd = true;
@@ -404,8 +404,8 @@ bool easy_bot_check_command(const char *cmd, size_t sz, const char *name,
 	switch (*tok) {
 	case '@':
 		if (strncmp(tok + 1, name, name_sz) == 0) {
-			if (off) {
-				*off = tok - cmd + name_sz + 1;
+			if (cmd_end_off) {
+				*cmd_end_off = tok - cmd;
 			}
 			if (shortcmd) {
 				*shortcmd = false;
@@ -414,8 +414,8 @@ bool easy_bot_check_command(const char *cmd, size_t sz, const char *name,
 		}
 		return false;
 	case ' ':
-		if (off) {
-			*off = tok - cmd;
+		if (cmd_end_off) {
+			*cmd_end_off = tok - cmd;
 		}
 		if (shortcmd) {
 			*shortcmd = true;
