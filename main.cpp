@@ -3,8 +3,11 @@
 
 #include <vector>
 #include <algorithm>
+#include <memory>
 #include "to_string.h"
 #include "json.hpp"
+#include "botkey.h"
+#include "const_str.h"
 
 using nlohmann::json;
 
@@ -19,6 +22,13 @@ const char *postChannelName =
 #include "cfg/channelname"
 ;
 
+// Bot commands config
+const TgInteger idOwner =
+#include "cfg/ownerid"
+;
+const char *postCommandName =
+#include "cfg/postcommandname"
+;
 
 class UpdateStateHandler {
 	std::vector<TgInteger> postUserIds;
@@ -231,9 +241,52 @@ public:
 	}
 };
 
-PhotoChannelPostHandler rcnPostHandler(idPostChannel, postChannelName);
+class BotCommand {
+public:
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off) = 0;
+};
 
-void handle_update_message(CURL *c, json &msg, bool &quit, size_t &upd_id)
+class BotCommandsHandler {
+	std::map<std::string, std::unique_ptr<BotCommand> > commands;
+
+public:
+	
+	bool handleCommands(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &upd)
+	{
+		auto text  = upd["message"].get<std::string>();
+		const auto &it = commands.find("vzhuh");
+		size_t off = 0;
+		if (!easy_bot_check_command(text.c_str(), text.length(),
+					BOT_NAME, COUNTOF(BOT_NAME), &off)) {
+			return false;
+		}
+		
+		return true;
+	}
+
+	void addCommand(const std::string &name, std::unique_ptr<BotCommand> command)
+	{
+		commands[name].swap(command);
+	}
+};
+
+class PostCommandHandler : public BotCommand {
+	PhotoChannelPostHandler &h;
+public:
+	PostCommandHandler(PhotoChannelPostHandler &ph) : h(ph) {}
+
+	bool command(CURL *c, const json &upd, const std::string &cmd, size_t off) override
+	{
+
+		return true;
+	}
+};
+
+PhotoChannelPostHandler photoPostHandler(idPostChannel, postChannelName);
+BotCommandsHandler commandsHandler;
+
+void handle_update_message(CURL *c, json &msg, bool &quit, size_t &updId)
 {
 	TgInteger fromId = 0;
 	TgInteger chatId = 0;
@@ -241,10 +294,11 @@ void handle_update_message(CURL *c, json &msg, bool &quit, size_t &upd_id)
 	auto &chat = msg["chat"];
 	fromId = from["id"].get<TgInteger>();
 	chatId = chat["id"].get<TgInteger>();
-	rcnPostHandler.handle_private_updates(c, fromId, chatId, msg);
+	photoPostHandler.handle_private_updates(c, fromId, chatId, msg);
+	commandsHandler.handleCommands(c, fromId, chatId, msg);
 }
 
-void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &upd_id)
+void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updId)
 {
 	auto &r = upd["result"];
 	if (!r.is_array()) {
@@ -253,9 +307,8 @@ void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &upd_id)
 	}
 	
 	for (auto msg : r) {
-		handle_all_updates(c, msg, quit, upd_id);
+		handle_all_updates(c, msg, quit, updId);
 	}
-		//rcnPostHandler.handle_private_updates();
 }
 
 int main(int argc, char *argv[])
@@ -267,6 +320,8 @@ int main(int argc, char *argv[])
 	CURL *c = bot_network_init();
 	json upd;
 	bool quit = false;
+	commandsHandler.addCommand(postCommandName,
+			std::make_unique<PostCommandHandler>(photoPostHandler));
 	do {
 		if(easy_perform_getUpdates(c, &d, upd_id, sleep_time) != CURLE_OK) {
 			fprintf(stderr, "Bot network error.\n");
