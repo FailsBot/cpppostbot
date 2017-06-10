@@ -86,7 +86,7 @@ public:
 		users.removeResultId(it);
 	}
 
-	bool handle_private_updates(CURL *c, TgInteger fromId,
+	bool handleUpdate(CURL *c, TgInteger fromId,
 			TgInteger chatId, const json &upd)
 	{
 		auto it = users.findId(fromId);
@@ -110,7 +110,7 @@ public:
 		return onUpdate(c, fromId, chatId, it, upd);
 	}
 
-	void handle_post_command(CURL *c, TgInteger fromId, TgInteger chatId)
+	void addPostCommand(CURL *c, TgInteger fromId, TgInteger chatId)
 	{
 		if (onAddHandler(c, fromId, chatId)) {
 			users.addId(fromId);
@@ -243,7 +243,7 @@ public:
 
 class BotCommand {
 public:
-	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off) = 0;
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) = 0;
 };
 
 class BotCommandsHandler {
@@ -254,15 +254,25 @@ public:
 	bool handleCommands(CURL *c, TgInteger fromId,
 			TgInteger chatId, const json &upd)
 	{
-		auto text  = upd["message"].get<std::string>();
-		const auto &it = commands.find("vzhuh");
+		auto text  = upd["text"].get<std::string>();
 		size_t off = 0;
 		if (!easy_bot_check_command(text.c_str(), text.length(),
 					BOT_NAME, COUNTOF(BOT_NAME), &off)) {
 			return false;
 		}
+
+		std::string s2 = text.substr(1, off - 1);
+		printf("\ntest found cmd: %s\n", s2.c_str());
+		const auto &cmd = commands.find(s2);
+		if (cmd == commands.end()) {
+			return false;
+		}
+		cmd->second->command(c, upd, text, off, fromId, chatId);
+		// if (commands.find();
 		
 		return true;
+		
+		return false;
 	}
 
 	void addCommand(const std::string &name, std::unique_ptr<BotCommand> command)
@@ -276,25 +286,33 @@ class PostCommandHandler : public BotCommand {
 public:
 	PostCommandHandler(PhotoChannelPostHandler &ph) : h(ph) {}
 
-	bool command(CURL *c, const json &upd, const std::string &cmd, size_t off) override
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
 	{
+		h.addPostCommand(c, fromId, chatId); 
 
 		return true;
 	}
 };
 
+class ResponseBotCommand : public BotCommand {
+public:
+	ResponseBotCommand() {}
+
+};
+
 PhotoChannelPostHandler photoPostHandler(idPostChannel, postChannelName);
 BotCommandsHandler commandsHandler;
 
-void handle_update_message(CURL *c, json &msg, bool &quit, size_t &updId)
+void handle_update_message(CURL *c, json &res, bool &quit, size_t &updId)
 {
 	TgInteger fromId = 0;
 	TgInteger chatId = 0;
+	auto &msg = res["message"];
 	auto &from = msg["from"];
 	auto &chat = msg["chat"];
 	fromId = from["id"].get<TgInteger>();
 	chatId = chat["id"].get<TgInteger>();
-	photoPostHandler.handle_private_updates(c, fromId, chatId, msg);
+	photoPostHandler.handleUpdate(c, fromId, chatId, msg);
 	commandsHandler.handleCommands(c, fromId, chatId, msg);
 }
 
@@ -306,24 +324,24 @@ void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updId)
 		return;
 	}
 	
-	for (auto msg : r) {
-		handle_all_updates(c, msg, quit, updId);
+	for (auto res : r) {
+		handle_update_message(c, res, quit, updId);
 	}
 }
 
 int main(int argc, char *argv[])
 {
 	size_t upd_id = 0;
-	size_t sleep_time = 0;
+	size_t sleep_time = 10;
 	writefn_data d;
-	writefn_data_init(d);
 	CURL *c = bot_network_init();
 	json upd;
 	bool quit = false;
 	commandsHandler.addCommand(postCommandName,
 			std::make_unique<PostCommandHandler>(photoPostHandler));
 	do {
-		if(easy_perform_getUpdates(c, &d, upd_id, sleep_time) != CURLE_OK) {
+		writefn_data_init(d);
+		if(easy_perform_getUpdates(c, &d, sleep_time, upd_id) != CURLE_OK) {
 			fprintf(stderr, "Bot network error.\n");
 			break;
 		} 
@@ -331,13 +349,18 @@ int main(int argc, char *argv[])
 			printf("%s\n", d.ptr);
 			break;
 		}
+		printf("%s\n", d.ptr);
 		upd = json::parse(d.ptr);
 		if (upd["ok"].is_null() || !upd["ok"].is_boolean() || !(upd["ok"].get<bool>())) {
 			fprintf(stderr, "Telegram server returns non-ok result: %s\n", d.ptr);
 			break;
 		}
 		handle_all_updates(c, upd, quit, upd_id);
+		writefn_data_free(d);
 	} while (!quit);
+	if (!quit) {
+		writefn_data_free(d);
+	}
 	bot_network_free(c);
 	return 0;
 }
