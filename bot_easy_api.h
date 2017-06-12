@@ -15,7 +15,7 @@ int easy_perform_commandstr(CURL *c, const char *url, writefn_data *data,
 int easy_perform_commandstr(CURL *c, const char *url);
 
 int easy_perform_getUpdates(CURL *c, writefn_data *d,
-		size_t poll_time = 0, size_t update_offset = 0);
+		size_t poll_time = 0, TgInteger update_offset = 0);
 int easy_perform_sendMessage(CURL *c, const char *chat_id, 
 	const char *msg, TgMessageParseMode mode, TgInteger reply_id,
 	const char *additional = 0, writefn_data *d2 = 0);

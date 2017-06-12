@@ -65,7 +65,7 @@ int easy_perform_commandstr(CURL *c, const char *url)
 	return result;
 }
 
-int easy_perform_getUpdates(CURL *c, writefn_data *d, size_t poll_time = 0, size_t update_offset = 0)
+int easy_perform_getUpdates(CURL *c, writefn_data *d, size_t poll_time = 0, TgInteger update_offset = 0)
 {
 	std::string s =  BOT_URL "getUpdates";
 	bool que = false;
