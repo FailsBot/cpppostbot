@@ -295,8 +295,20 @@ public:
 };
 
 class ResponseBotCommand : public BotCommand {
+	std::string message;
+	TgMessageParseMode mode;
+	std::string additional;
 public:
-	ResponseBotCommand() {}
+	ResponseBotCommand(std::string msg, TgMessageParseMode mode = TgMessageParse_Normal, std::string additional = "")
+		: message(std::move(msg)), mode(mode), additional(additional) {}
+
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
+	{
+		easy_perform_sendMessage(c, chatId, message.c_str(),
+				mode, 0, additional.c_str(), 0);
+		return true;
+	}
+
 
 };
 
@@ -339,6 +351,9 @@ int main(int argc, char *argv[])
 	bool quit = false;
 	commandsHandler.addCommand(postCommandName,
 			std::make_unique<PostCommandHandler>(photoPostHandler));
+	commandsHandler.addCommand("start",
+			std::make_unique<ResponseBotCommand>(
+				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postChannelName, TgMessageParse_Normal));
 	do {
 		writefn_data_init(d);
 		if(easy_perform_getUpdates(c, &d, sleep_time, upd_id) != CURLE_OK) {
