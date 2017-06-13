@@ -30,6 +30,12 @@ const char *postCommandName =
 #include "cfg/postcommandname"
 ;
 
+// The simplest interface which all command handlers must implement.
+class BotCommand {
+public:
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) = 0;
+};
+
 typedef std::vector<std::string> TgUserNamesList;
 
 // The simple users ids list.
@@ -260,11 +266,6 @@ public:
 		easy_perform_sendMessage(c, chatId, "Ок, отправь мне форвард от того пользователя, которого ты хочешь сделать редактором канала.", TgMessageParse_Normal, 0);
 		return true;
 	}
-};
-
-class BotCommand {
-public:
-	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) = 0;
 };
 
 class BotCommandsHandler {
