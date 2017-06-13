@@ -30,6 +30,8 @@ const char *postCommandName =
 #include "cfg/postcommandname"
 ;
 
+const char *addAdminCommandName = "addadmin";
+
 // The simplest interface which all command handlers must implement.
 class BotCommand {
 public:
@@ -300,19 +302,6 @@ public:
 	}
 };
 
-class PostCommandHandler : public BotCommand {
-	PhotoChannelPostHandler &h;
-public:
-	PostCommandHandler(PhotoChannelPostHandler &ph) : h(ph) {}
-
-	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
-	{
-		h.addPostCommand(c, fromId, chatId); 
-
-		return true;
-	}
-};
-
 class ResponseBotCommand : public BotCommand {
 	std::string message;
 	TgMessageParseMode mode;
@@ -327,24 +316,59 @@ public:
 				mode, 0, additional.c_str(), 0);
 		return true;
 	}
+};
 
+class PostCommandHandler : public BotCommand {
+	PhotoChannelPostHandler &h;
+public:
+	PostCommandHandler(PhotoChannelPostHandler &ph) : h(ph) {}
+
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
+	{
+		h.addPostCommand(c, fromId, chatId); 
+
+		return true;
+	}
+};
+
+class AddAdminCommand : public BotCommand {
+	AddAdminHandler &h;
+public:
+	AddAdminCommand(AddAdminHandler &hn) : h(hn) {}
+
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
+	{
+		if (fromId != idOwner) {
+			return false;
+		}
+		h.addPostCommand(c, fromId, chatId);
+		return true;
+	}
 
 };
 
+	}
+};
+
+// Bot global context
+TgUsersList adminIdsList;
+std::vector<std::string> adminNamesList;
 PhotoChannelPostHandler photoPostHandler(idPostChannel, postChannelName);
 BotCommandsHandler commandsHandler;
+AddAdminHandler addAdminsHandler(postChannelName, adminIdsList, adminNamesList);
 
 void handle_update_message(CURL *c, json &res, bool &quit, size_t &updId)
 {
 	TgInteger fromId = 0;
 	TgInteger chatId = 0;
+	TgInteger updId2  = res["update_id"].get<TgInteger>();
 	auto &msg = res["message"];
 	auto &from = msg["from"];
 	auto &chat = msg["chat"];
 	fromId = from["id"].get<TgInteger>();
 	chatId = chat["id"].get<TgInteger>();
-	photoPostHandler.handleUpdate(c, fromId, chatId, msg);
-	commandsHandler.handleCommands(c, fromId, chatId, msg);
+
+	updId = updId2 + 1;
 }
 
 void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updId)
@@ -373,6 +397,8 @@ int main(int argc, char *argv[])
 	commandsHandler.addCommand("start",
 			std::make_unique<ResponseBotCommand>(
 				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postCommandName, TgMessageParse_Normal));
+	commandsHandler.addCommand("addadmin",
+			std::make_unique<AddAdminCommand>(addAdminsHandler));
 
 	do {
 		writefn_data_init(d);
