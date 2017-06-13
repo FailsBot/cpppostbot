@@ -347,6 +347,37 @@ public:
 
 };
 
+class PrintUserListCommand : public BotCommand {
+	TgUsersList &users;
+	TgUserNamesList &usernames;
+public:
+	PrintUserListCommand(TgUsersList &u, TgUserNamesList &l) : users(u), usernames(l) {}
+
+	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
+	{
+		if (fromId != idOwner) {
+			return false;
+		}
+		std::ostringstream oss;
+		oss << "Список редакторов:\n";
+		size_t i = 0;
+		for (auto it : usernames) {
+			oss << (i + 1) << ". " << it << ";\n";
+			i++;
+		}
+		for (auto it : users) {
+			oss << (i + 1) << ". id" << it << ";\n";
+			i++;
+		}
+		if (i == 0) {
+			oss << "(Список пустой. Добавьте нового с помощью команды /" << addAdminCommandName << ".)";
+		}
+		std::string s2 = oss.str();
+		const char *s3 = curl_easy_escape(c, s2.c_str(), s2.length());
+		easy_perform_sendMessage(c, chatId, s3, TgMessageParse_Normal, 0, 0, 0);
+		curl_free( (char*)s3);
+		return true;
+
 	}
 };
 
@@ -399,6 +430,8 @@ int main(int argc, char *argv[])
 				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postCommandName, TgMessageParse_Normal));
 	commandsHandler.addCommand("addadmin",
 			std::make_unique<AddAdminCommand>(addAdminsHandler));
+	commandsHandler.addCommand("adminlist",
+			std::make_unique<PrintUserListCommand>(adminIdsList, adminNamesList));
 
 	do {
 		writefn_data_init(d);
