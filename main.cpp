@@ -139,14 +139,14 @@ protected:
 
 };
 
-
 class PhotoChannelPostHandler : public PostHandler {
 	std::string send_request;
 	std::string sent_successfully;
 	std::string sent_error;
+	TgInteger postChannelId;
 public:
 
-	PhotoChannelPostHandler(TgInteger channelId, const char *name = "") : PostHandler(channelId)
+	PhotoChannelPostHandler(TgInteger channelId, const char *name = "") : postChannelId(channelId)
 	{
 		send_request = "Ок, перешли мне фотографию с опциональным описанием";
 		sent_successfully = "Фотография успешно отправлена";
