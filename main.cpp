@@ -100,7 +100,7 @@ public:
 		if (have_t) {
 			const std::string &s = upd["text"].get<std::string>();
 			bool my = easy_bot_check_command(s.c_str(), s.length(),
-						"FailsBot", 8, nullptr);
+						BOT_NAME, COUNTOF(BOT_NAME), nullptr);
 
 			if ((s.find("/cancel") == 0) && my) {
 				cancel(c, chatId, it, upd);
@@ -116,6 +116,7 @@ public:
 			users.addId(fromId);
 		}
 	}
+
 	virtual ~PostHandler() {}
 protected:
 	virtual bool onCancel(CURL *c, TgInteger chatId, It it, const json &upd) = 0;
@@ -142,7 +143,7 @@ public:
 
 			sent_successfully += " в канал ";
 			sent_successfully += name;
-			sent_error += "в канал ";
+			sent_error += " в канал ";
 			sent_error += name;
 		}
 		send_request += ". Или нажми /cancel для отмены.";
@@ -185,7 +186,7 @@ class AddAdminHandler : public PostHandler {
 		auto &fwd = msg["forward_from"];
 		TgInteger id = fwd["id"].get<TgInteger>();
 		easy_perform_sendMessage(c, chatId,
-				"Этот пользователь добавлен в список редакторов канала.", TgMessageParse_Normal, 0);
+				"Готово. Пользователь добавлен в список редакторов канала.", TgMessageParse_Normal, 0);
 		// easy_perform_sendMessage(c, chatId, (std::string("Ок. пользователь добавлен в список администраторов канала.") + std::to_string(id)).c_str(), 0);
 		h.addId(id);
 	}
@@ -228,7 +229,7 @@ public:
 
 			// todo, bleat.
 			stop(it);
-			easy_perform_sendMessage(c, chatId, "вжух", TgMessageParse_Normal, 0);
+			// easy_perform_sendMessage(c, chatId, "вжух", TgMessageParse_Normal, 0);
 		}
 		return true;
 	}
@@ -268,11 +269,8 @@ public:
 			return false;
 		}
 		cmd->second->command(c, upd, text, off, fromId, chatId);
-		// if (commands.find();
 		
 		return true;
-		
-		return false;
 	}
 
 	void addCommand(const std::string &name, std::unique_ptr<BotCommand> command)
@@ -353,7 +351,8 @@ int main(int argc, char *argv[])
 			std::make_unique<PostCommandHandler>(photoPostHandler));
 	commandsHandler.addCommand("start",
 			std::make_unique<ResponseBotCommand>(
-				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postChannelName, TgMessageParse_Normal));
+				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postCommandName, TgMessageParse_Normal));
+
 	do {
 		writefn_data_init(d);
 		if(easy_perform_getUpdates(c, &d, sleep_time, upd_id) != CURLE_OK) {
