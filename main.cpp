@@ -30,7 +30,10 @@ const char *postCommandName =
 #include "cfg/postcommandname"
 ;
 
-class UpdateStateHandler {
+typedef std::vector<std::string> TgUserNamesList;
+
+// The simple users ids list.
+class TgUsersList {
 	std::vector<TgInteger> postUserIds;
 public:
 	typedef std::vector<TgInteger>::iterator IteratorResult;
@@ -62,19 +65,24 @@ public:
 		return true;
 	}
 
+	IteratorResult begin()
+	{
+		return postUserIds.begin();
+	}
+
+	IteratorResult end()
+	{
+		return postUserIds.end();
+	}
 };
 
 class PostHandler {
 protected:
-	UpdateStateHandler users;
-	TgInteger postChannelId;
+	TgUsersList users;
 public:
-	typedef UpdateStateHandler::IteratorResult It;
+	typedef TgUsersList::IteratorResult It;
 
-	PostHandler(TgInteger chatId)
-		: postChannelId(chatId) {}
-
-	void cancel(CURL *c, TgInteger chatId, UpdateStateHandler::IteratorResult it, const json &upd)
+	void cancel(CURL *c, TgInteger chatId, TgUsersList::IteratorResult it, const json &upd)
 	{
 		if (onCancel(c, chatId, it, upd)) {
 			stop(it);
@@ -151,7 +159,7 @@ public:
 		sent_error += ".";
 	}
 
-	bool onCancel(CURL *c, TgInteger chatId, UpdateStateHandler::IteratorResult it, const json &upd) override
+	bool onCancel(CURL *c, TgInteger chatId, TgUsersList::IteratorResult it, const json &upd) override
 	{
 		 easy_perform_sendMessage(c, chatId, "Ок, команда отменена.", TgMessageParse_Normal, 0);
 		return true;
@@ -178,8 +186,13 @@ public:
 	}
 };
 
+const char *fileadminslist = "adminsnames";
+const char *fileadminidslist = "adminsids"; // if the admin has not a @username.
+
 class AddAdminHandler : public PostHandler {
-	UpdateStateHandler &h;
+	TgUsersList &h; // the separate list for admin's ids.
+	TgUserNamesList &adminNamesList;
+	const std::string chanName;
 
 	void addUserToAdminsFromForward(CURL *c, TgInteger chatId, const json &msg)
 	{
@@ -196,10 +209,17 @@ class AddAdminHandler : public PostHandler {
 		return msg.find("forward_from") != msg.end()
 			&& !msg["forward_from"].is_null();
 	}
+
+	// TODO: make a proper username check (like regexp @[A-Za-z_]$).
+	bool messageIsAUsername(const std::string &msg) const
+	{
+		size_t len = msg.length();
+		return len != 0 && msg[0] == '@';
+	}
 public:
-	AddAdminHandler(TgInteger channelId, const char *name,
-			UpdateStateHandler &hn)
-		: PostHandler(channelId), h(hn) {}
+	AddAdminHandler(const char *name,
+			TgUsersList &hn, TgUserNamesList &l)
+		: h(hn), chanName(name), adminNamesList(l) {}
 
 	bool onCancel(CURL *c, TgInteger chatId, It it, const json &msg) override
 	{
