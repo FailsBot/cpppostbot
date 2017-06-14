@@ -233,6 +233,7 @@ public:
 	{
 		if (messageIsForward(msg)) {
 			addUserToAdminsFromForward(c, chatId, msg);
+			return true;
 		}
 		easy_perform_sendMessage(c, chatId, "Ок, команда отменена.", TgMessageParse_Normal, 0);
 		return true;
