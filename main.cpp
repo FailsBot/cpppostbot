@@ -424,16 +424,21 @@ int main(int argc, char *argv[])
 	CURL *c = bot_network_init();
 	json upd;
 	bool quit = false;
+
+	// Create bot commands.
 	commandsHandler.addCommand(postCommandName,
 			std::make_unique<PostCommandHandler>(photoPostHandler));
 	commandsHandler.addCommand("start",
 			std::make_unique<ResponseBotCommand>(
 				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postCommandName, TgMessageParse_Normal));
+
+	// Admin commands.
 	commandsHandler.addCommand("addadmin",
 			std::make_unique<AddAdminCommand>(addAdminsHandler));
 	commandsHandler.addCommand("adminlist",
 			std::make_unique<PrintUserListCommand>(adminIdsList, adminNamesList));
 
+	// The main message loop.
 	do {
 		writefn_data_init(d);
 		if(easy_perform_getUpdates(c, &d, sleep_time, upd_id) != CURLE_OK) {
