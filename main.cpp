@@ -213,23 +213,11 @@ public:
 	}
 };
 
-const char *fileadminslist = "adminsnames";
-const char *fileadminidslist = "adminsids"; // if the admin has not a @username.
-
-class AddAdminHandler : public PostHandler {
+class ModifyAdminsHandler : public PostHandler {
+protected:
 	TgUsersList &h; // the separate list for admin's ids.
 	TgUserNamesList &adminNamesList;
 	const std::string chanName;
-
-	void addUserToAdminsFromForward(CURL *c, TgInteger chatId, const json &msg)
-	{
-		auto &fwd = msg["forward_from"];
-		TgInteger id = fwd["id"].get<TgInteger>();
-		easy_perform_sendMessage(c, chatId,
-				"Готово. Пользователь добавлен в список редакторов канала.", TgMessageParse_Normal, 0);
-		// easy_perform_sendMessage(c, chatId, (std::string("Ок. пользователь добавлен в список администраторов канала.") + std::to_string(id)).c_str(), 0);
-		h.addId(id);
-	}
 
 	bool messageIsForward(const json &msg) const
 	{
@@ -243,16 +231,53 @@ class AddAdminHandler : public PostHandler {
 		size_t len = msg.length();
 		return len != 0 && msg[0] == '@';
 	}
+
+	virtual bool handleForward(CURL *c, TgInteger chatId, It currentUserId, const json &msg, bool fromCancel) = 0;
+	virtual bool handleMessage(CURL *c, TgInteger chatId, It currentUserId, const json &msg) = 0;
+
 public:
-	AddAdminHandler(const char *name,
+	class ModifyEntriesListener {
+	public:
+		enum NotifyType {
+			ModifyAdminName,
+			ModifyAdminId
+		};
+
+		virtual void notify(NotifyType type) = 0;
+		virtual ~ModifyEntriesListener() {}
+	};
+protected:
+	void notifyListener(ModifyEntriesListener::NotifyType type)
+	{
+		if (listener) {
+			listener->notify(type);
+		}
+	}
+private:
+	class ModifyEntriesListener *listener;
+public:
+	void addListener(ModifyEntriesListener &l)
+	{
+		listener = &l;
+	}
+
+	void removeListener()
+	{
+		listener = nullptr;
+	}
+
+	ModifyAdminsHandler(const char *name,
 			TgUsersList &hn, TgUserNamesList &l)
 		: h(hn), chanName(name), adminNamesList(l) {}
 
 	bool onCancel(CURL *c, TgInteger chatId, It it, const json &msg) override
 	{
 		if (messageIsForward(msg)) {
-			addUserToAdminsFromForward(c, chatId, msg);
-			return true;
+			if (handleForward(c, chatId, it, msg, true)) {
+				stop(it);
+				return true;
+			}
+			return false;
 		}
 		easy_perform_sendMessage(c, chatId, "Ок, команда отменена.", TgMessageParse_Normal, 0);
 		return true;
@@ -267,34 +292,129 @@ public:
 			return true;
 		}
 
-		TgInteger id = 0;
-		bool is_fwd = messageIsForward(upd);
-		if (is_fwd) {
-			addUserToAdminsFromForward(c, chatId, upd);
-			stop(it);
-			return true;
+		if (messageIsForward(upd)) {
+			if (handleForward(c, chatId, it, upd, false)) {
+				stop(it);
+				return true;
+			}
+			return false;
 		} else {
-
-			// todo, bleat.
-			stop(it);
-			// easy_perform_sendMessage(c, chatId, "вжух", TgMessageParse_Normal, 0);
+			if (handleMessage(c, chatId, it, upd)) {
+				stop(it);
+				return true;
+			}
+			return false;
 		}
+
 		return true;
 	}
+
+};
+
+class AddAdminHandler : public ModifyAdminsHandler {
+
+	void addUserToAdminsFromForward(CURL *c, TgInteger chatId, const json &msg)
+	{
+		auto &fwd = msg["forward_from"];
+		TgInteger id = fwd["id"].get<TgInteger>();
+		easy_perform_sendMessage(c, chatId,
+				"Готово. Пользователь добавлен.", TgMessageParse_Normal, 0);
+		h.addId(id);
+		notifyListener(ModifyEntriesListener::ModifyAdminId);
+	}
+
+	virtual bool handleForward(CURL *c, TgInteger chatId, It currentUserId, const json &msg, bool fromCancel) override
+	{
+		addUserToAdminsFromForward(c, chatId, msg);
+		return true;
+	}
+
+	bool handleMessage(CURL *c, TgInteger chatId, It currentUserId, const json &msg) override
+	{
+		std::string text = msg["text"].get<std::string>();
+		if (messageIsAUsername(text)) {
+			this->adminNamesList.push_back(text.substr(1));
+			easy_perform_sendMessage(c, chatId, "Готово. Пользователь добавлен.", TgMessageParse_Normal, 0);
+			notifyListener(ModifyEntriesListener::ModifyAdminName);
+			return true;
+		}
+		return false;
+	}
+public:
+	AddAdminHandler(const char *channelName, TgUsersList &ids,
+			TgUserNamesList &names)
+		: ModifyAdminsHandler(channelName, ids, names) {}
 
 	bool onAddHandler(CURL *c, TgInteger fromId,
 			TgInteger chatId) override
 	{
-		easy_perform_sendMessage(c, chatId, "Ок, отправь мне форвард от того пользователя, которого ты хочешь сделать редактором канала.", TgMessageParse_Normal, 0);
+		easy_perform_sendMessage(c, chatId, "Ок, отправь мне юзернейм (в виде @username), или форвард от пользователя, которого ты хочешь сделать редактором канала, или нажми /cancel для отмены.", TgMessageParse_Normal, 0);
 		return true;
 	}
+
+};
+
+class RemoveAdminHandler : public ModifyAdminsHandler {
+
+	bool removeUserFromAdminListFromForward(CURL *c, TgInteger chatId, const json &msg)
+	{
+		auto &fwd = msg["forward_from"];
+		TgInteger id = fwd["id"].get<TgInteger>();
+		auto res = h.findId(id);
+		if (h.haveResultId(res)) {
+			easy_perform_sendMessage(c, chatId,
+					"Готово. Пользователь удален.", TgMessageParse_Normal, 0);
+			h.removeResultId(res);
+			notifyListener(ModifyEntriesListener::ModifyAdminId);
+			return true;
+		} else {
+			easy_perform_sendMessage(c, chatId, "Такой пользователь не найден. Команда отменена.", TgMessageParse_Normal, 0);
+			return false;
+		}
+	}
+protected:
+
+	virtual bool handleForward(CURL *c, TgInteger chatId, It currentUserId, const json &msg, bool fromCancel) override
+	{
+		removeUserFromAdminListFromForward(c, chatId, msg);
+		return true;
+	}
+
+	bool handleMessage(CURL *c, TgInteger chatId, It currentUserId, const json &msg) override
+	{
+		std::string text = msg["text"].get<std::string>();
+		if (messageIsAUsername(text)) {
+			auto res = std::find(this->adminNamesList.begin(),
+					this->adminNamesList.end(), text.substr(1));
+			if (res != this->adminNamesList.end()) {
+				this->adminNamesList.erase(res);
+				easy_perform_sendMessage(c, chatId, "Готово. Пользователь удален.", TgMessageParse_Normal, 0);
+				notifyListener(ModifyEntriesListener::ModifyAdminName);
+			} else {
+				easy_perform_sendMessage(c, chatId, "Такой пользователь не найден. Команда отменена.", TgMessageParse_Normal, 0);
+			}
+
+			return true;
+		}
+		return false;
+	}
+
+public:
+	RemoveAdminHandler(const char *name, TgUsersList &ids, TgUserNamesList &names)
+	 : ModifyAdminsHandler(name, ids, names) {}
+
+	bool onAddHandler(CURL *c, TgInteger fromId,
+			TgInteger chatId) override
+	{
+		easy_perform_sendMessage(c, chatId, "Ок, отправь мне юзернейм (в виде @username), или форвард от пользователя, которого ты хочешь удалить из редакторов канала, или нажми /cancel для отмены.", TgMessageParse_Normal, 0);
+		return true;
+	}
+
 };
 
 class BotCommandsHandler {
 	std::map<std::string, std::unique_ptr<BotCommand> > commands;
-
 public:
-	
 	bool handleCommands(CURL *c, TgInteger fromId,
 			TgInteger chatId, const json &upd)
 	{
@@ -340,21 +460,45 @@ public:
 
 class PostCommandHandler : public BotCommand {
 	PhotoChannelPostHandler &h;
+	TgUsersList &ids;
+	TgUserNamesList &names;
 public:
-	PostCommandHandler(PhotoChannelPostHandler &ph) : h(ph) {}
+	PostCommandHandler(PhotoChannelPostHandler &ph,
+			TgUsersList &ids, TgUserNamesList &names)
+		: h(ph), ids(ids), names(names) {}
 
 	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
 	{
+		if (!ids.haveId(fromId)) {
+			// check username.
+			const auto &usr = upd.find("from");
+			if (usr == upd.end() && !upd.is_object()) {
+				return false;
+			}
+			const auto &name = upd.find("username");
+			if (name == upd.cend()) { 
+				return false;
+			}
+			auto s = name->get<std::string>();
+			if (s.empty()) {
+				return false;
+			}
+			s = s.substr(1);
+			if (std::find(names.begin(), names.end(), s) == names.end()) {
+				return false;
+			}
+		}
+
 		h.addPostCommand(c, fromId, chatId); 
 
 		return true;
 	}
 };
 
-class AddAdminCommand : public BotCommand {
-	AddAdminHandler &h;
+class AdminCommand : public BotCommand {
+	PostHandler &h;
 public:
-	AddAdminCommand(AddAdminHandler &hn) : h(hn) {}
+	AdminCommand(PostHandler &hn) : h(hn) {}
 
 	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
 	{
@@ -483,6 +627,7 @@ std::vector<std::string> adminNamesList;
 PhotoChannelPostHandler photoPostHandler(idPostChannel, postChannelName);
 BotCommandsHandler commandsHandler;
 AddAdminHandler addAdminsHandler(postChannelName, adminIdsList, adminNamesList);
+RemoveAdminHandler removeAdminsHandler(postChannelName, adminIdsList, adminNamesList);
 ListFlusher flusher(adminIdsList, adminNamesList, 10);
 
 void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
@@ -539,16 +684,18 @@ int main(int argc, char *argv[])
 
 	// Create bot commands.
 	commandsHandler.addCommand(postCommandName,
-			std::make_unique<PostCommandHandler>(photoPostHandler));
+			std::make_unique<PostCommandHandler>(photoPostHandler, adminIdsList, adminNamesList));
 	commandsHandler.addCommand("start",
 			std::make_unique<ResponseBotCommand>(
 				std::string("Привет! Я @" BOT_NAME "! Я могу постить твои фотографии с подписями в канал. Чтобы это сделать, используй команду /") + postCommandName, TgMessageParse_Normal));
 
 	// Admin commands.
 	commandsHandler.addCommand("addadmin",
-			std::make_unique<AddAdminCommand>(addAdminsHandler));
+			std::make_unique<AdminCommand>(addAdminsHandler));
 	commandsHandler.addCommand("adminlist",
 			std::make_unique<PrintUserListCommand>(adminIdsList, adminNamesList));
+	commandsHandler.addCommand("removeadmin",
+			std::make_unique<AdminCommand>(removeAdminsHandler));
 
 	// Add file flush listener
 	addAdminsHandler.addListener(flusher);
