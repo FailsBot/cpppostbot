@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <memory>
 #include <fstream>
+#include <signal.h>
 #include "to_string.h"
 #include "json.hpp"
 #include "botkey.h"
@@ -521,6 +522,16 @@ int main(int argc, char *argv[])
 	CURL *c = bot_network_init();
 	json upd;
 	bool quit = false;
+
+	auto sig = [](int sig) {
+		flusher.forceFlush();
+		exit(sig);
+	};
+
+	// Register signal handlers.
+	signal(SIGINT, sig);
+	signal(SIGKILL, sig);
+	signal(SIGTERM, sig);
 
 	// Load from file.
 	loadFromFile(fileadminslist, adminNamesList);
