@@ -52,10 +52,17 @@ public:
 typedef std::vector<std::string> TgUserNamesList;
 
 // The simple users ids list.
+// XXX: transform it to simple typedef for std::vector
+// for generic template functions like loadFromFile().
 class TgUsersList {
 	std::vector<TgInteger> postUserIds;
 public:
 	typedef std::vector<TgInteger>::iterator IteratorResult;
+
+	std::vector<TgInteger> &vec() 
+	{
+		return postUserIds;
+	}
 
 	bool haveId(TgInteger userId)
 	{
@@ -451,7 +458,7 @@ public:
 
 		if (--counter == 0) {
 			if (updates[ModifyAdminId]) {
-				saveToFile(fileadminidslist, ids);
+				saveToFile(fileadminidslist, ids.vec());
 				updates[ModifyAdminId] = false;
 			}
 			
@@ -514,6 +521,10 @@ int main(int argc, char *argv[])
 	CURL *c = bot_network_init();
 	json upd;
 	bool quit = false;
+
+	// Load from file.
+	loadFromFile(fileadminslist, adminNamesList);
+	loadFromFile(fileadminidslist, adminIdsList.vec());
 
 	// Create bot commands.
 	commandsHandler.addCommand(postCommandName,
