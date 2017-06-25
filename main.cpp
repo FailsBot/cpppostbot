@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <fstream>
 #include "to_string.h"
 #include "json.hpp"
 #include "botkey.h"
@@ -30,7 +31,17 @@ const char *postCommandName =
 #include "cfg/postcommandname"
 ;
 
+const size_t adminsListFlushIntervalInUpdCalls =
+#include "cfg/admlistflushinterval"
+;
+
+// Another constants.
+
 const char *addAdminCommandName = "addadmin";
+
+// Persistent storage config
+const char *fileadminslist = "adminsnames";
+const char *fileadminidslist = "adminsids"; // if the admin has not a @username.
 
 // The simplest interface which all command handlers must implement.
 class BotCommand {
@@ -382,12 +393,89 @@ public:
 	}
 };
 
+// Storage classes.
+template <typename DestStorage>
+DestStorage &loadFromFile(const char *filename, DestStorage &dest)
+{
+	std::ifstream fs;
+	fs.open(filename, std::ios_base::in);
+	if (!fs.is_open()) {
+		return dest;
+	}
+	typename DestStorage::value_type t;
+	while (fs >> t) {
+		dest.push_back(t);
+	}
+	return dest;
+}
+
+template <typename SourceStorage>
+SourceStorage &saveToFile(const char *filename, SourceStorage &src)
+{
+	std::ofstream of;
+	of.open(filename, std::ios_base::out);
+	if (!of.is_open()) {
+		return src;
+	}
+
+	for (auto &t : src) {
+		of << t << std::endl;
+	}
+	return src;
+}
+
+class ListFlusher : public ModifyAdminsHandler::ModifyEntriesListener {
+	TgUsersList &ids;
+	TgUserNamesList &names;
+	size_t timeout;
+	size_t counter;
+	bool updates[2];
+public:
+	ListFlusher(TgUsersList &ids, TgUserNamesList &names,
+			size_t timeToFlush)
+	: ids(ids), names(names), timeout(timeToFlush) {}
+
+	void notify(NotifyType wh) override
+	{
+		updates[wh] = true;
+		if (!counter) {
+			counter = timeout;
+		}
+	}
+	
+	void countdown()
+	{
+		if (!counter) {
+			return;
+		}
+
+		if (--counter == 0) {
+			if (updates[ModifyAdminId]) {
+				saveToFile(fileadminidslist, ids);
+				updates[ModifyAdminId] = false;
+			}
+			
+			if (updates[ModifyAdminName]) {
+				saveToFile(fileadminslist, names);
+				updates[ModifyAdminName] = false;
+			}
+		}
+	}
+
+	void forceFlush()
+	{
+		saveToFile(fileadminslist, names);
+		saveToFile(fileadminidslist, ids);
+	}
+};
+
 // Bot global context
 TgUsersList adminIdsList;
 std::vector<std::string> adminNamesList;
 PhotoChannelPostHandler photoPostHandler(idPostChannel, postChannelName);
 BotCommandsHandler commandsHandler;
 AddAdminHandler addAdminsHandler(postChannelName, adminIdsList, adminNamesList);
+ListFlusher flusher(adminIdsList, adminNamesList, 10);
 
 void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
 {
@@ -399,6 +487,8 @@ void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
 	auto &chat = msg["chat"];
 	fromId = from["id"].get<TgInteger>();
 	chatId = chat["id"].get<TgInteger>();
+
+	flusher.countdown();
 
 	updateOffset = updId2 + 1;
 }
@@ -437,6 +527,9 @@ int main(int argc, char *argv[])
 			std::make_unique<AddAdminCommand>(addAdminsHandler));
 	commandsHandler.addCommand("adminlist",
 			std::make_unique<PrintUserListCommand>(adminIdsList, adminNamesList));
+
+	// Add file flush listener
+	addAdminsHandler.addListener(flusher);
 
 	// The main message loop.
 	do {
