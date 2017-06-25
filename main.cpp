@@ -389,7 +389,7 @@ PhotoChannelPostHandler photoPostHandler(idPostChannel, postChannelName);
 BotCommandsHandler commandsHandler;
 AddAdminHandler addAdminsHandler(postChannelName, adminIdsList, adminNamesList);
 
-void handle_update_message(CURL *c, json &res, bool &quit, size_t &updId)
+void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
 {
 	TgInteger fromId = 0;
 	TgInteger chatId = 0;
@@ -400,10 +400,10 @@ void handle_update_message(CURL *c, json &res, bool &quit, size_t &updId)
 	fromId = from["id"].get<TgInteger>();
 	chatId = chat["id"].get<TgInteger>();
 
-	updId = updId2 + 1;
+	updateOffset = updId2 + 1;
 }
 
-void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updId)
+void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updateOffset)
 {
 	auto &r = upd["result"];
 	if (!r.is_array()) {
@@ -412,7 +412,7 @@ void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updId)
 	}
 	
 	for (auto res : r) {
-		handle_update_message(c, res, quit, updId);
+		handle_update_message(c, res, quit, updateOffset);
 	}
 }
 
