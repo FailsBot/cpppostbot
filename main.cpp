@@ -50,6 +50,15 @@ public:
 	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) = 0;
 };
 
+// The interface for all update handlers.
+class UpdateHandler {
+public:
+
+	virtual bool handleUpdate(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &upd) = 0;
+	virtual ~UpdateHandler() {}
+};
+
 typedef std::vector<std::string> TgUserNamesList;
 
 // The simple users ids list.
@@ -103,7 +112,7 @@ public:
 	}
 };
 
-class PostHandler {
+class PostHandler : public UpdateHandler {
 protected:
 	TgUsersList users;
 public:
@@ -305,10 +314,8 @@ public:
 			}
 			return false;
 		}
-
 		return true;
 	}
-
 };
 
 class AddAdminHandler : public ModifyAdminsHandler {
@@ -409,14 +416,13 @@ public:
 		easy_perform_sendMessage(c, chatId, "Ок, отправь мне юзернейм (в виде @username), или форвард от пользователя, которого ты хочешь удалить из редакторов канала, или нажми /cancel для отмены.", TgMessageParse_Normal, 0);
 		return true;
 	}
-
 };
 
-class BotCommandsHandler {
+class BotCommandsHandler : public UpdateHandler {
 	std::map<std::string, std::unique_ptr<BotCommand> > commands;
 public:
-	bool handleCommands(CURL *c, TgInteger fromId,
-			TgInteger chatId, const json &upd)
+	bool handleUpdate(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &upd) override
 	{
 		auto text  = upd["text"].get<std::string>();
 		size_t off = 0;
@@ -630,20 +636,80 @@ AddAdminHandler addAdminsHandler(postChannelName, adminIdsList, adminNamesList);
 RemoveAdminHandler removeAdminsHandler(postChannelName, adminIdsList, adminNamesList);
 ListFlusher flusher(adminIdsList, adminNamesList, 10);
 
+// Update handlers.
+class StorageCountdownUpdateHandler : public UpdateHandler {
+public:
+	bool handleUpdate(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &msg) override
+	{
+		flusher.countdown();
+		return false;
+	}
+};
+
+class FromIdsFieldsIntilializer : public UpdateHandler {
+	TgInteger &fromId;
+	TgInteger &chatId;
+public:
+	FromIdsFieldsIntilializer(TgInteger &fromId, TgInteger &chatId)
+		: fromId(fromId), chatId(chatId) {}
+
+	bool handleUpdate(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &msg) override
+	{
+		const auto &from = msg.find("from");
+		
+		if (from == msg.end()) {
+			return true;
+		}
+		fromId = from.value()["id"].get<TgInteger>();
+
+		auto &chat = msg["chat"];
+		chatId = chat["id"].get<TgInteger>();
+		return false; // allow to advance the msg to the next handler.
+	}
+};
+
+class DismissNonTextMessagesHandler : public UpdateHandler {
+	bool handleUpdate(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &msg) override
+	{
+		return msg.find("text") == msg.end();
+	}
+};
+
 void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
 {
+	static DismissNonTextMessagesHandler nonTextHandler;
+	static StorageCountdownUpdateHandler storageCountdownHandler;
 	TgInteger fromId = 0;
 	TgInteger chatId = 0;
-	TgInteger updId2  = res["update_id"].get<TgInteger>();
+	TgInteger updId = res["update_id"].get<TgInteger>();
+
+	if (res.find("message") == res.end()) {
+		updateOffset = updId + 1;
+		return;
+	}
+
 	auto &msg = res["message"];
-	auto &from = msg["from"];
-	auto &chat = msg["chat"];
-	fromId = from["id"].get<TgInteger>();
-	chatId = chat["id"].get<TgInteger>();
 
-	flusher.countdown();
+	static UpdateHandler *handlers[] = {
+		&storageCountdownHandler,
+		&photoPostHandler,
+		&addAdminsHandler,
+		&removeAdminsHandler,
+		// order matters.
+		&nonTextHandler,
+		&commandsHandler,
+	};
 
-	updateOffset = updId2 + 1;
+	for (auto handler : handlers) {
+		if (handler->handleUpdate(c, fromId, chatId, msg)) {
+			break;
+		}
+	}
+	
+	updateOffset = updId + 1;
 }
 
 void handle_all_updates(CURL *c, json &upd, bool &quit, size_t &updateOffset)
