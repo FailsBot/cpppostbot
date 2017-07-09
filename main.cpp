@@ -647,6 +647,22 @@ public:
 	}
 };
 
+class DismissNonMessagesUpdates : public UpdateHandler {
+
+	json &update;
+	json *&msg;
+public:
+	DismissNonMessagesUpdates(json &upd, json *&msg)
+		: update(upd), msg(msg) {}
+
+	bool handleUpdate(CURL *c, TgInteger fromId,
+			TgInteger chatId, const json &msg) override
+	{
+		update.find("message");
+		return true;
+	}
+};
+
 class FromIdsFieldsIntilializer : public UpdateHandler {
 	TgInteger &fromId;
 	TgInteger &chatId;
@@ -662,10 +678,10 @@ public:
 		if (from == msg.end()) {
 			return true;
 		}
-		fromId = from.value()["id"].get<TgInteger>();
+		this->fromId = from.value()["id"].get<TgInteger>();
 
 		auto &chat = msg["chat"];
-		chatId = chat["id"].get<TgInteger>();
+		this->chatId = chat["id"].get<TgInteger>();
 		return false; // allow to advance the msg to the next handler.
 	}
 };
@@ -684,6 +700,8 @@ void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
 	static StorageCountdownUpdateHandler storageCountdownHandler;
 	TgInteger fromId = 0;
 	TgInteger chatId = 0;
+	FromIdsFieldsIntilializer fieldsInitializer(fromId, chatId);
+	// json *msg = nullptr;
 	TgInteger updId = res["update_id"].get<TgInteger>();
 
 	if (res.find("message") == res.end()) {
@@ -694,6 +712,9 @@ void handle_update_message(CURL *c, json &res, bool &quit, size_t &updateOffset)
 	auto &msg = res["message"];
 
 	static UpdateHandler *handlers[] = {
+		// nullptr,
+		// nullptr,
+		&fieldsInitializer,
 		&storageCountdownHandler,
 		&photoPostHandler,
 		&addAdminsHandler,
