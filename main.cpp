@@ -473,24 +473,24 @@ public:
 			TgUsersList &ids, TgUserNamesList &names)
 		: h(ph), ids(ids), names(names) {}
 
-	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
+	virtual bool command(CURL *c, const json &msg, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) override
 	{
 		if (!ids.haveId(fromId)) {
 			// check username.
-			const auto &usr = upd.find("from");
-			if (usr == upd.end() && !upd.is_object()) {
+			const auto &user = msg.find("from");
+			if (user == msg.end() && !user->is_object()) {
 				return false;
 			}
-			const auto &name = upd.find("username");
-			if (name == upd.cend()) { 
+			const auto &name = user->find("username");
+			if (name == user->cend()) { 
 				return false;
 			}
-			auto s = name->get<std::string>();
-			if (s.empty()) {
+			auto username = name->get<std::string>();
+			if (username.empty()) {
 				return false;
 			}
-			s = s.substr(1);
-			if (std::find(names.begin(), names.end(), s) == names.end()) {
+			// username = username.substr(1);
+			if (std::find(names.begin(), names.end(), username) == names.end()) {
 				return false;
 			}
 		}
