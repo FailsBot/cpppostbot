@@ -13,6 +13,10 @@ else()
       # -Wall -Wextra -Werror -pedantic -g -std=c++1y")
 endif()
 
+if(DEFINED USE_TO_STRING_HACK)
+	add_definitions(-DUSE_TO_STRING_HACK)
+endif()
+
 set(SOURCES
       "main.cpp"
       "bot_easy_api.cpp"

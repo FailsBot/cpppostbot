@@ -6,7 +6,11 @@
 #include <memory>
 #include <fstream>
 #include <signal.h>
+
+#ifdef USE_TO_STRING_HACK
 #include "to_string.h"
+#endif
+
 #include "json.hpp"
 #include "botkey.h"
 #include "const_str.h"

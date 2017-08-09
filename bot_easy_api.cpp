@@ -1,5 +1,7 @@
 #include <curl/curl.h>
+#ifdef USE_TO_STRING_HACK
 #include "to_string.h" // work around fucked android ndk bug
+#endif
 #include <stdio.h>
 #include <string>
 #include "writefn_data.h"
