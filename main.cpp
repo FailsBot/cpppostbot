@@ -766,7 +766,7 @@ int main(int argc, char *argv[])
 
 	// Register signal handlers.
 	signal(SIGINT, sig);
-	signal(SIGKILL, sig);
+//	signal(SIGKILL, sig);
 	signal(SIGTERM, sig);
 
 	// Load from file.
