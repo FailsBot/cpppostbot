@@ -3,13 +3,6 @@ project(postbot)
 
 find_package(CURL REQUIRED)
 
-# todo: make some Android-specific conditional statements
-option(USE_TO_STRING_HACK "Use the std::to_string hackish implementation on Android NDK" OFF)
-
-if(USE_TO_STRING_HACK)
-    add_definitions(-DUSE_TO_STRING_HACK)
-endif()
-
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS OFF)
