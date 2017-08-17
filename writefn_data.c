@@ -1,4 +1,7 @@
+
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "writefn_data.h"
 
 void writefn_data_init(struct writefn_data *d)

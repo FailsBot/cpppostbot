@@ -1,3 +1,4 @@
+
 #include <curl/curl.h>
 #ifdef USE_TO_STRING_HACK
 #include "to_string.h" // work around fucked android ndk bug
@@ -9,6 +10,7 @@
 #include "termcolor.h"
 #include "tgtypes.h"
 #include <assert.h>
+#include <string.h>
 
 //
 // Bot easy API
