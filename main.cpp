@@ -299,6 +299,10 @@ public:
 	bool onUpdate(CURL *c, TgInteger fromId,
 			TgInteger chatId, It it, const json &upd) override
 	{
+		if (upd.find("text") == upd.end()) {
+			return true;
+		}
+
 		bool has_text = upd["text"].is_string();
 
 		if (!has_text) {
