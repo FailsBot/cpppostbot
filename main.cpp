@@ -52,6 +52,7 @@ const char *fileadminidslist = "adminsids"; // if the admin has not a @username.
 class BotCommand {
 public:
 	virtual bool command(CURL *c, const json &upd, const std::string &cmd, size_t off, TgInteger fromId, TgInteger chatId) = 0;
+	virtual ~BotCommand() = default;
 };
 
 // The interface for all update handlers.
@@ -60,7 +61,7 @@ public:
 
 	virtual bool handleUpdate(CURL *c, TgInteger fromId,
 			TgInteger chatId, const json &upd) = 0;
-	virtual ~UpdateHandler() {}
+	virtual ~UpdateHandler() = default;
 };
 
 typedef std::vector<std::string> TgUserNamesList;
