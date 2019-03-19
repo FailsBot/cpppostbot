@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/FailsBot/cpppostbot.svg?branch=master)](https://travis-ci.org/FailsBot/cpppostbot)
 # Channel Post helper bot
 
 ## Configuration
