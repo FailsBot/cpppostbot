@@ -10,11 +10,10 @@
 * Have fun!
 
 ## Dependencies
-* C++11;
+* C++14 (you also could try to build with C++11 compiler);
 * cmake;
 * curl;
 * nlohmann json (file json.hpp);
-* to\_string workaround for Android NDK. You may enable it while configuring the cmake build.
 
 ## Available Commands
 * `/addadmin` - adds a new admin for your channel. The bot will ask you user ID or @username of new admin. This user can post messages to your channel using your _post_ command;
