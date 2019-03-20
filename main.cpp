@@ -1,11 +1,13 @@
-#include "bot_easy_api.h"
-#include "writefn_data.h"
-
 #include <vector>
-#include <algorithm>
 #include <memory>
 #include <fstream>
+#include <algorithm>
+
 #include <signal.h>
+
+// tgbotlib
+#include "bot_easy_api.h"
+#include "writefn_data.h"
 
 #include "json.hpp"
 #include "botkey.h"
